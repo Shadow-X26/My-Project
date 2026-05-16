@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Daily Expense Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ══ RESET & TOKENS ══════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:        #0f0e0c;
+  --paper:      #f7f4ef;
+  --cream:      #ede9e1;
+  --gold:       #c8963e;
+  --gold-light: #f0c97a;
+  --gold-pale:  #fdf5e6;
+  --red:        #c0392b;
+  --red-bg:     #fdf2f0;
+  --green:      #1e8449;
+  --green-bg:   #f0faf3;
+  --muted:      #7a7167;
+  --line:       #ddd8cc;
+  --white:      #ffffff;
+
+  --ff-display: 'Playfair Display', Georgia, serif;
+  --ff-body:    'DM Sans', sans-serif;
+  --ff-mono:    'DM Mono', monospace;
+
+  --radius:   4px;
+  --radius-lg: 8px;
+  --shadow:   0 2px 16px rgba(15,14,12,.07);
+  --shadow-md:0 6px 32px rgba(15,14,12,.12);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--ff-body);
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ══ TOPBAR ═══════════════════════════════════ */
+.topbar {
+  background: var(--ink);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 62px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 3px solid var(--gold);
+}
+
+.logo {
+  font-family: var(--ff-display);
+  font-size: 1.5rem;
+  color: var(--gold-light);
+  letter-spacing: .02em;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.logo-dot {
+  width: 8px; height: 8px;
+  background: var(--gold);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.topbar-date {
+  font-family: var(--ff-mono);
+  font-size: .73rem;
+  color: var(--muted);
+  letter-spacing: .06em;
+}
+
+/* ══ LAYOUT ════════════════════════════════════ */
+.shell {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+  display: grid;
+  grid-template-columns: 370px 1fr;
+  gap: 1.75rem;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+}
+
+/* ══ CARDS ══════════════════════════════════════ */
+.card {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+.card:last-child { margin-bottom: 0; }
+
+.card-header {
+  background: var(--ink);
+  color: var(--gold-light);
+  font-family: var(--ff-display);
+  font-size: .97rem;
+  padding: .75rem 1.25rem;
+  letter-spacing: .04em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
+
+.card-body { padding: 1.4rem 1.25rem; }
+
+/* ══ STATS ══════════════════════════════════════ */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+@media (max-width: 860px) {
+  .stat-strip { grid-template-columns: repeat(2, 1fr); }
+}
+
+.stat {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 1.1rem;
+  box-shadow: var(--shadow);
+}
+.stat-label {
+  font-family: var(--ff-mono);
+  font-size: .68rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: .3rem;
+}
+.stat-value {
+  font-family: var(--ff-display);
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.1;
+  word-break: break-all;
+}
+.stat-value.over  { color: var(--red); }
+.stat-value.ok    { color: var(--green); }
+.stat-value.muted { color: var(--muted); font-size: 1rem; font-family: var(--ff-body); font-weight: 400; }
+
+/* ══ BUDGET BAR ══════════════════════════════════ */
+.budget-bar-wrap {
+  margin: .5rem 0 .3rem;
+  background: var(--cream);
+  border-radius: 999px;
+  height: 7px;
+  overflow: hidden;
+}
+.budget-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--gold);
+  transition: width .6s cubic-bezier(.4,0,.2,1);
+}
+.budget-bar-fill.over { background: var(--red); }
+.budget-meta {
+  font-family: var(--ff-mono);
+  font-size: .7rem;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ══ ALERTS ══════════════════════════════════════ */
+.alert-zone { margin-bottom: 1rem; }
+.alert {
+  border-left: 4px solid;
+  padding: .7rem 1rem;
+  font-size: .87rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin-bottom: .6rem;
+  animation: slideDown .25s ease;
+}
+.alert:last-child { margin-bottom: 0; }
+.alert-danger  { background: var(--red-bg);   border-color: var(--red);   color: var(--red); }
+.alert-success { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+.alert-warning { background: #fef9ee; border-color: var(--gold); color: #7a5000; }
+
+/* ══ FORM ════════════════════════════════════════ */
+.field { margin-bottom: .95rem; }
+.field:last-of-type { margin-bottom: 0; }
+
+label {
+  display: block;
+  font-family: var(--ff-mono);
+  font-size: .7rem;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: .3rem;
+}
+label .opt { color: #bbb; font-weight: 400; }
+
+input[type="number"],
+input[type="date"],
+input[type="text"],
+select {
+  width: 100%;
+  padding: .62rem .9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--ff-body);
+  font-size: .9rem;
+  background: var(--paper);
+  color: var(--ink);
+  transition: border-color .2s, box-shadow .2s;
+  appearance: none;
+  -webkit-appearance: none;
+}
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(200,150,62,.15);
+}
+input.error { border-color: var(--red); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+
+/* ══ BUTTONS ══════════════════════════════════════ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  padding: .62rem 1.1rem;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--ff-body);
+  font-weight: 500;
+  font-size: .875rem;
+  cursor: pointer;
+  transition: background .2s, transform .1s, opacity .2s;
+  text-decoration: none;
+  line-height: 1;
+}
+.btn:active { transform: scale(.97); }
+
+.btn-primary {
+  background: var(--ink);
+  color: var(--gold-light);
+  width: 100%;
+  font-size: .95rem;
+  padding: .82rem;
+  letter-spacing: .02em;
+  margin-top: .75rem;
+}
+.btn-primary:hover { background: #252320; }
+
+.btn-danger {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid #f0cac7;
+  padding: .28rem .6rem;
+  font-size: .78rem;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+.btn-danger:hover { background: var(--red-bg); }
+
+.btn-export {
+  background: var(--gold-pale);
+  color: #7a5000;
+  border: 1px solid #e8d8a0;
+  font-size: .78rem;
+  padding: .4rem .85rem;
+  white-space: nowrap;
+}
+.btn-export:hover { background: #f5e8c0; }
+
+/* ══ EXPENSE LIST ══════════════════════════════ */
+.expense-list {
+  max-height: 520px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.expense-list::-webkit-scrollbar { width: 4px; }
+.expense-list::-webkit-scrollbar-track { background: var(--cream); }
+.expense-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+
+.expense-row {
+  display: grid;
+  grid-template-columns: 72px 1fr auto auto;
+  align-items: center;
+  gap: .6rem;
+  padding: .8rem 1.25rem;
+  border-bottom: 1px solid var(--cream);
+  transition: background .15s;
+  animation: slideDown .22s ease backwards;
+}
+.expense-row:hover { background: var(--gold-pale); }
+.expense-row:last-child { border-bottom: none; }
+
+.exp-date {
+  font-family: var(--ff-mono);
+  font-size: .7rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.exp-info { min-width: 0; }
+.exp-cat {
+  display: inline-block;
+  font-family: var(--ff-mono);
+  font-size: .66rem;
+  letter-spacing: .07em;
+  padding: .12rem .5rem;
+  border-radius: 999px;
+  margin-bottom: .12rem;
+  white-space: nowrap;
+}
+.exp-desc {
+  font-size: .82rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.exp-amount {
+  font-family: var(--ff-display);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3.5rem 1rem;
+  color: var(--muted);
+}
+.empty-icon { font-size: 2.5rem; margin-bottom: .75rem; opacity: .4; }
+.empty-state h3 {
+  font-family: var(--ff-display);
+  font-size: 1.1rem;
+  color: var(--ink);
+  margin-bottom: .25rem;
+}
+.empty-state p { font-size: .83rem; }
+
+/* ══ CATEGORY COLORS ══════════════════════════ */
+.cat-Food          { background:#fff3e0; color:#e65100; }
+.cat-Rent          { background:#e8eaf6; color:#3949ab; }
+.cat-Transport     { background:#e0f2f1; color:#00695c; }
+.cat-Utilities     { background:#f3e5f5; color:#7b1fa2; }
+.cat-Healthcare    { background:#fce4ec; color:#c62828; }
+.cat-Entertainment { background:#e8f5e9; color:#2e7d32; }
+.cat-Shopping      { background:#fff8e1; color:#f57f17; }
+.cat-Education     { background:#e3f2fd; color:#1565c0; }
+.cat-Savings       { background:#e8f5e9; color:#1b5e20; }
+.cat-Other         { background:#f5f5f5; color:#424242; }
+
+/* ══ CHART ════════════════════════════════════ */
+.chart-wrap {
+  position: relative;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chart-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .35rem .75rem;
+  margin-top: 1rem;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .78rem;
+  overflow: hidden;
+}
+.legend-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.legend-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.legend-pct {
+  font-family: var(--ff-mono);
+  font-size: .68rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ══ FOOTER ════════════════════════════════════ */
+.footer {
+  text-align: center;
+  padding: 1.5rem 1rem 2.5rem;
+  font-family: var(--ff-mono);
+  font-size: .68rem;
+  color: var(--muted);
+  letter-spacing: .07em;
+  border-top: 1px solid var(--line);
+  margin-top: 1rem;
+}
+
+/* ══ ANIMATIONS ════════════════════════════════ */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; } to { opacity: 1; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Ledger
+  </div>
+  <div class="topbar-date" id="topbarDate"></div>
+</header>
+
+<main class="shell">
+  <!-- ══ LEFT COLUMN ══════════════════════════ -->
+  <aside>
+    <div class="alert-zone" id="alertZone"></div>
+
+    <!-- Add Expense Form -->
+    <div class="card">
+      <div class="card-header">Add Expense</div>
+      <div class="card-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="fAmount">Amount (&#2547;)</label>
+            <input type="number" id="fAmount" min="0.01" step="0.01" placeholder="0.00">
+          </div>
+          <div class="field">
+            <label for="fDate">Date</label>
+            <input type="date" id="fDate">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="fCategory">Category</label>
+          <select id="fCategory">
+            <option value="">— Select category —</option>
+            <option>Food</option>
+            <option>Rent</option>
+            <option>Transport</option>
+            <option>Utilities</option>
+            <option>Healthcare</option>
+            <option>Entertainment</option>
+            <option>Shopping</option>
+            <option>Education</option>
+            <option>Savings</option>
+            <option>Other</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="fDesc">Description <span class="opt">(optional)</span></label>
+          <input type="text" id="fDesc" placeholder="e.g. Lunch at café">
+        </div>
+
+        <div class="field">
+          <label for="fBudget">Monthly Budget Limit (&#2547;) <span class="opt">(optional)</span></label>
+          <input type="number" id="fBudget" min="0" step="0.01" placeholder="e.g. 20000">
+        </div>
+
+        <button class="btn btn-primary" onclick="addExpense()">+ Log Expense</button>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card" id="chartCard" style="display:none">
+      <div class="card-header">Spending by Category</div>
+      <div class="card-body">
+        <div class="chart-wrap">
+          <canvas id="catChart"></canvas>
+        </div>
+        <div class="chart-legend" id="chartLegend"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ RIGHT COLUMN ══════════════════════════ -->
+  <section>
+    <!-- Stats -->
+    <div class="stat-strip">
+      <div class="stat">
+        <div class="stat-label">This Month</div>
+        <div class="stat-value" id="statMonth">&#2547;0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Total Entries</div>
+        <div class="stat-value" id="statCount">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Budget Left</div>
+        <div class="stat-value muted" id="statLeft">Not set</div>
+      </div>
+    </div>
+
+    <!-- Budget bar (hidden until budget set) -->
+    <div id="budgetBarWrap" style="display:none; margin-bottom:1rem; padding:0 .1rem">
+      <div class="budget-bar-wrap">
+        <div class="budget-bar-fill" id="budgetBarFill" style="width:0%"></div>
+      </div>
+      <div class="budget-meta">
+        <span id="budgetPctLabel">0% used</span>
+        <span id="budgetLimitLabel"></span>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="card">
+      <div class="card-header">
+        Expense History
+        <button class="btn btn-export" onclick="exportCSV()">&#8595; Export CSV</button>
+      </div>
+      <div class="expense-list" id="expenseList">
+        <div class="empty-state">
+          <div class="empty-icon">&#128196;</div>
+          <h3>No expenses logged yet.</h3>
+          <p>Add your first entry using the form.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  LEDGER &nbsp;&middot;&nbsp; DAILY EXPENSE TRACKER &nbsp;&middot;&nbsp; DATA SAVED IN YOUR BROWSER
+</footer>
+
+<script>
+/* ══════════════════════════════════════════════
+   STATE & STORAGE
+══════════════════════════════════════════════ */
+const STORAGE_KEY = 'ledger_expenses_v1';
+let expenses = [];
+let chartInstance = null;
+
+const CAT_PALETTE = {
+  Food:'#e65100', Rent:'#3949ab', Transport:'#00695c',
+  Utilities:'#7b1fa2', Healthcare:'#c62828', Entertainment:'#2e7d32',
+  Shopping:'#f57f17', Education:'#1565c0', Savings:'#1b5e20', Other:'#424242'
+};
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    expenses = raw ? JSON.parse(raw) : [];
+  } catch { expenses = []; }
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+}
+
+/* ══════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  // Set today's date as default
+  document.getElementById('fDate').value = todayStr();
+
+  // Display date in topbar
+  document.getElementById('topbarDate').textContent =
+    new Date().toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
+  load();
+  render();
+});
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/* ══════════════════════════════════════════════
+   ADD EXPENSE
+══════════════════════════════════════════════ */
+function addExpense() {
+  clearAlerts();
+  const errs = [];
+
+  const amountRaw  = document.getElementById('fAmount').value.trim();
+  const dateVal    = document.getElementById('fDate').value;
+  const category   = document.getElementById('fCategory').value;
+  const desc       = document.getElementById('fDesc').value.trim();
+  const budgetRaw  = document.getElementById('fBudget').value.trim();
+
+  // Validation
+  if (!amountRaw || isNaN(amountRaw) || parseFloat(amountRaw) <= 0)
+    errs.push('Amount must be a positive number.');
+  if (!dateVal)
+    errs.push('Please select a valid date.');
+  if (!category)
+    errs.push('Please select a category.');
+
+  if (errs.length) {
+    errs.forEach(e => showAlert(e, 'danger'));
+    return;
+  }
+
+  const amount = parseFloat(parseFloat(amountRaw).toFixed(2));
+  const budget = budgetRaw !== '' && !isNaN(budgetRaw) && parseFloat(budgetRaw) > 0
+                 ? parseFloat(budgetRaw) : null;
+
+  const entry = {
+    id: 'exp_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    amount, category,
+    date: dateVal,
+    description: desc,
+    budget,
+    created_at: new Date().toISOString()
+  };
+
+  expenses.push(entry);
+  save();
+
+  // Reset form
+  document.getElementById('fAmount').value   = '';
+  document.getElementById('fCategory').value = '';
+  document.getElementById('fDesc').value     = '';
+  document.getElementById('fDate').value     = todayStr();
+  // Keep budget field so user doesn't have to retype
+
+  showAlert('Expense added successfully!', 'success');
+  render();
+}
+
+/* ══════════════════════════════════════════════
+   DELETE EXPENSE
+══════════════════════════════════════════════ */
+function deleteExpense(id) {
+  if (!confirm('Remove this expense entry?')) return;
+  expenses = expenses.filter(e => e.id !== id);
+  save();
+  showAlert('Entry removed.', 'success');
+  render();
+}
+
+/* ══════════════════════════════════════════════
+   RENDER
+══════════════════════════════════════════════ */
+function render() {
+  const currentMonth = todayStr().slice(0,7); // "YYYY-MM"
+
+  // Sort newest first
+  const sorted = [...expenses].sort((a,b) => b.date.localeCompare(a.date));
+
+  // Stats
+  let monthTotal = 0, monthBudget = null, catTotals = {};
+  sorted.forEach(e => {
+    if (e.date.slice(0,7) === currentMonth) {
+      monthTotal += e.amount;
+      if (e.budget && monthBudget === null) monthBudget = e.budget;
+    }
+    catTotals[e.category] = (catTotals[e.category] || 0) + e.amount;
+  });
+
+  const budgetExceeded = monthBudget !== null && monthTotal > monthBudget;
+  const budgetPct = monthBudget ? Math.min(100, Math.round(monthTotal / monthBudget * 100)) : 0;
+
+  // Update stat strip
+  const fmt = n => '\u09F3' + n.toLocaleString('en-BD', {minimumFractionDigits:0, maximumFractionDigits:0});
+  const fmtDec = n => '\u09F3' + n.toLocaleString('en-BD', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  const elMonth = document.getElementById('statMonth');
+  elMonth.textContent = fmt(monthTotal);
+  elMonth.className = 'stat-value' + (budgetExceeded ? ' over' : '');
+
+  document.getElementById('statCount').textContent = expenses.length;
+
+  const elLeft = document.getElementById('statLeft');
+  if (monthBudget !== null) {
+    const left = monthBudget - monthTotal;
+    elLeft.textContent = (left < 0 ? '-' : '') + '\u09F3' + Math.abs(left).toLocaleString('en-BD', {minimumFractionDigits:0, maximumFractionDigits:0});
+    elLeft.className = 'stat-value ' + (budgetExceeded ? 'over' : 'ok');
+  } else {
+    elLeft.textContent = 'Not set';
+    elLeft.className = 'stat-value muted';
+  }
+
+  // Budget bar
+  const barWrap = document.getElementById('budgetBarWrap');
+  if (monthBudget !== null) {
+    barWrap.style.display = 'block';
+    const fill = document.getElementById('budgetBarFill');
+    fill.style.width = budgetPct + '%';
+    fill.className = 'budget-bar-fill' + (budgetExceeded ? ' over' : '');
+    document.getElementById('budgetPctLabel').textContent = budgetPct + '% used';
+    document.getElementById('budgetLimitLabel').textContent = 'Limit: ' + fmtDec(monthBudget);
+  } else {
+    barWrap.style.display = 'none';
+  }
+
+  // Budget exceeded warning
+  const existingWarn = document.querySelector('.alert-warning');
+  if (existingWarn) existingWarn.remove();
+  if (budgetExceeded) {
+    const zone = document.getElementById('alertZone');
+    const div = document.createElement('div');
+    div.className = 'alert alert-warning';
+    div.innerHTML = `&#9888; You've exceeded your monthly budget of <strong>${fmtDec(monthBudget)}</strong> — currently at <strong>${fmtDec(monthTotal)}</strong>.`;
+    zone.insertBefore(div, zone.firstChild);
+  }
+
+  // Expense list
+  const list = document.getElementById('expenseList');
+  if (sorted.length === 0) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">&#128196;</div>
+      <h3>No expenses logged yet.</h3>
+      <p>Add your first entry using the form.</p>
+    </div>`;
+  } else {
+    list.innerHTML = sorted.map((e, i) => {
+      const d = new Date(e.date + 'T00:00:00');
+      const dayStr = d.toLocaleDateString('en-BD', {day:'2-digit', month:'short'});
+      const yearStr = d.getFullYear();
+      const safeDesc = e.description
+        ? e.description.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        : '';
+      return `
+      <div class="expense-row" style="animation-delay:${i*0.03}s">
+        <div class="exp-date">${dayStr}<br>${yearStr}</div>
+        <div class="exp-info">
+          <span class="exp-cat cat-${e.category}">${e.category}</span>
+          <div class="exp-desc">${safeDesc || '&mdash;'}</div>
+        </div>
+        <div class="exp-amount">\u09F3${e.amount.toLocaleString('en-BD',{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <button class="btn btn-danger" onclick="deleteExpense('${e.id}')" title="Delete">&#10005;</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Chart
+  renderChart(catTotals);
+}
+
+/* ══════════════════════════════════════════════
+   CHART
+══════════════════════════════════════════════ */
+function renderChart(catTotals) {
+  const chartCard = document.getElementById('chartCard');
+  const entries = Object.entries(catTotals).filter(([,v]) => v > 0);
+
+  if (entries.length === 0) {
+    chartCard.style.display = 'none';
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    return;
+  }
+
+  chartCard.style.display = 'block';
+  entries.sort((a,b) => b[1]-a[1]);
+
+  const labels = entries.map(([k]) => k);
+  const values = entries.map(([,v]) => v);
+  const colors = labels.map(l => CAT_PALETTE[l] || '#888');
+  const total  = values.reduce((a,b) => a+b, 0);
+
+  const ctx = document.getElementById('catChart').getContext('2d');
+  if (chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors.map(c => c + 'dd'),
+        borderColor: colors,
+        borderWidth: 2,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '64%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const val = ctx.parsed;
+              const pct = ((val/total)*100).toFixed(1);
+              return ` \u09F3${val.toLocaleString('en-BD',{minimumFractionDigits:2})} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Legend
+  const legend = document.getElementById('chartLegend');
+  legend.innerHTML = labels.map((lbl, i) => {
+    const pct = ((values[i]/total)*100).toFixed(0);
+    return `<div class="legend-item">
+      <span class="legend-dot" style="background:${colors[i]}"></span>
+      <span class="legend-name">${lbl}</span>
+      <span class="legend-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════
+   EXPORT CSV
+══════════════════════════════════════════════ */
+function exportCSV() {
+  if (expenses.length === 0) {
+    showAlert('No data to export.', 'danger');
+    return;
+  }
+  const rows = [['ID','Date','Category','Amount','Description','Budget Limit','Added At']];
+  expenses.forEach(e => rows.push([
+    e.id, e.date, e.category, e.amount,
+    e.description || '', e.budget || '', e.created_at
+  ]));
+
+  const csv = rows.map(r =>
+    r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
+  ).join('\r\n');
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `expenses_${todayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ══════════════════════════════════════════════
+   ALERTS
+══════════════════════════════════════════════ */
+function showAlert(msg, type) {
+  const zone = document.getElementById('alertZone');
+  const div  = document.createElement('div');
+  div.className = `alert alert-${type}`;
+  div.textContent = msg;
+  zone.appendChild(div);
+  if (type !== 'warning') {
+    setTimeout(() => div.style.opacity = '0', 2800);
+    setTimeout(() => div.remove(), 3200);
+  }
+}
+
+function clearAlerts() {
+  const zone = document.getElementById('alertZone');
+  zone.querySelectorAll('.alert-danger, .alert-success').forEach(a => a.remove());
+}
+</script>
+</body>
+</html>
